@@ -1,0 +1,99 @@
+version: "3.9"
+
+# ── Local development stack ───────────────────────────────────────────────────
+# Starts:
+#   • PostgreSQL 15        → localhost:5432
+#   • Employee Service     → http://localhost:8080
+#   • Swagger UI           → http://localhost:8080/swagger-ui.html
+#   • pgAdmin 4 (optional) → http://localhost:5050
+#
+# Usage:
+#   docker compose up            # start all services
+#   docker compose up db         # start only the database
+#   docker compose down -v       # stop and remove volumes
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    container_name: employee-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${DB_NAME:-employee_db}
+      POSTGRES_USER:     ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-employee_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - employee-net
+
+  # ── Employee Management Service ─────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: employee-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_HOST:                db
+      DB_PORT:                5432
+      DB_NAME:                ${DB_NAME:-employee_db}
+      DB_USER:                ${DB_USER:-postgres}
+      DB_PASSWORD:            ${DB_PASSWORD:-postgres}
+      SERVER_PORT:            8080
+      ADMIN_USER:             ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD:         ${ADMIN_PASSWORD:-secret}
+      LOG_FILE:               /app/logs/application.log
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    volumes:
+      - app_logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+    networks:
+      - employee-net
+
+  # ── pgAdmin 4 (optional GUI) ────────────────────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: employee-pgadmin
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      PGADMIN_DEFAULT_EMAIL:    admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    networks:
+      - employee-net
+    profiles:
+      - tools     # only started with: docker compose --profile tools up
+
+volumes:
+  postgres_data:
+    driver: local
+  app_logs:
+    driver: local
+
+networks:
+  employee-net:
+    driver: bridge

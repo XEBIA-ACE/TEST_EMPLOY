@@ -1,0 +1,42 @@
+# ── Production profile ─────────────────────────────────────────────────────
+# All sensitive values MUST be supplied via environment variables or a
+# secrets manager (AWS Secrets Manager, HashiCorp Vault, etc.).
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: HikariPool-Prod
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      minimum-idle: ${DB_POOL_MIN_IDLE:5}
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      # Validate connections before handing them out from the pool
+      connection-test-query: SELECT 1
+
+  jpa:
+    show-sql: false
+
+logging:
+  level:
+    root: WARN
+    com.example.employee: INFO
+    org.hibernate.SQL: WARN
+  # Structured JSON logging for log aggregation (ELK / Splunk)
+  pattern:
+    console: '{"timestamp":"%d{yyyy-MM-dd HH:mm:ss.SSS}","level":"%level","logger":"%logger{36}","message":"%message"}%n'
+
+management:
+  endpoint:
+    health:
+      show-details: never      # Do not expose internals publicly in prod
+
+server:
+  # Enable HTTPS in prod — terminate TLS at the load balancer / ingress
+  error:
+    include-message: never     # Do not leak internal messages to clients
+    include-binding-errors: never

@@ -1,0 +1,36 @@
+# ── Development profile ────────────────────────────────────────────────────
+# Loaded when SPRING_PROFILES_ACTIVE=dev (the default).
+# Uses the PostgreSQL instance defined in docker-compose.yml.
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:employee_db}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: HikariPool-Dev
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  # Provide a default in-memory user for local Basic Auth testing.
+  # Replace with a real auth server in staging/prod.
+  security:
+    user:
+      name: ${ADMIN_USER:admin}
+      password: ${ADMIN_PASSWORD:secret}
+
+logging:
+  level:
+    com.example.employee: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql: TRACE
