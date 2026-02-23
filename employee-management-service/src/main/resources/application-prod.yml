@@ -1,23 +1,24 @@
-# ── Production profile overrides ────────────────────────────────────────────
-# Activate with: SPRING_PROFILES_ACTIVE=prod
-
 spring:
   jpa:
     show-sql: false
 
+  flyway:
+    # In production, only apply schema migrations — skip seed data
+    locations: classpath:db/migration
+    out-of-order: false
+
+server:
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+
 management:
   endpoint:
     health:
-      show-details: never    # Never expose internal details in production
+      show-details: never
 
 logging:
   level:
     root: WARN
-    com.company.employee: INFO
-
-springdoc:
-  swagger-ui:
-    # Optionally disable Swagger UI in production
-    enabled: ${SWAGGER_ENABLED:false}
-  api-docs:
-    enabled: ${SWAGGER_ENABLED:false}
+    com.example.employeemanagement: INFO

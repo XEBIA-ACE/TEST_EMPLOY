@@ -1,19 +1,17 @@
 # Employee Management Service
 
-A production-ready REST API for managing employee records, built with **Java 21** and **Spring Boot 3**.
-
----
+A production-ready REST API for managing employee records, built with **Java 17** and **Spring Boot 3**.
 
 ## Table of Contents
 
 - [Features](#features)
+- [Tech Stack](#tech-stack)
 - [Architecture](#architecture)
-- [Prerequisites](#prerequisites)
-- [Quick Start (Docker)](#quick-start-docker)
-- [Local Development (without Docker)](#local-development-without-docker)
+- [Quick Start](#quick-start)
 - [Configuration](#configuration)
 - [API Reference](#api-reference)
-- [Testing](#testing)
+- [Running Tests](#running-tests)
+- [Docker](#docker)
 - [Project Structure](#project-structure)
 
 ---
@@ -21,282 +19,308 @@ A production-ready REST API for managing employee records, built with **Java 21*
 ## Features
 
 - Full CRUD for employee records
-- Pagination, sorting, department/status filtering, and keyword search
-- Input validation with detailed field-level error responses
-- Flyway database migrations (PostgreSQL)
+- Paginated listing, department/status filtering, and full-text search
+- Auto-generated employee numbers (`EMP-000001`)
+- JPA audit fields (`createdAt`, `updatedAt`, `createdBy`, `updatedBy`)
+- Input validation with descriptive error responses
 - OpenAPI 3 / Swagger UI documentation
-- Spring Actuator health and metrics endpoints
-- Structured JSON logging
-- Multi-stage Docker build with non-root runtime user
-- Multi-environment profiles (dev / prod)
+- Flyway database migrations
+- HTTP Basic Auth with role-based access control (`ADMIN`, `HR`)
+- Structured logging + Spring Actuator health/metrics endpoints
+- Multi-stage Docker build with non-root user
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Language | Java 17 |
+| Framework | Spring Boot 3.2 |
+| Database | PostgreSQL 16 |
+| ORM | Spring Data JPA / Hibernate |
+| Migrations | Flyway |
+| Mapping | MapStruct |
+| Docs | SpringDoc OpenAPI (Swagger UI) |
+| Testing | JUnit 5, Mockito, MockMvc, H2 |
+| Containerization | Docker (multi-stage), docker-compose |
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     HTTP Clients                        │
-└───────────────────────────┬─────────────────────────────┘
-                            │
-               ┌────────────▼────────────┐
-               │   EmployeeController    │  ← REST / JSON (Spring MVC)
-               └────────────┬────────────┘
-                            │
-               ┌────────────▼────────────┐
-               │    EmployeeService      │  ← Business logic
-               └────────────┬────────────┘
-                            │
-               ┌────────────▼────────────┐
-               │  EmployeeRepository     │  ← Spring Data JPA
-               └────────────┬────────────┘
-                            │
-               ┌────────────▼────────────┐
-               │      PostgreSQL         │
-               └─────────────────────────┘
+┌─────────────────────────────────────────────┐
+│              HTTP Clients                   │
+└────────────────────┬────────────────────────┘
+                     │
+          ┌──────────▼──────────┐
+          │  EmployeeController │  ← REST layer (validation, routing)
+          └──────────┬──────────┘
+                     │
+          ┌──────────▼──────────┐
+          │  EmployeeService    │  ← Business logic
+          └──────────┬──────────┘
+                     │
+          ┌──────────▼──────────┐
+          │ EmployeeRepository  │  ← Data access (Spring Data JPA)
+          └──────────┬──────────┘
+                     │
+          ┌──────────▼──────────┐
+          │     PostgreSQL      │
+          └─────────────────────┘
 ```
 
-**Key design decisions:**
-
-| Concern | Approach |
-|---|---|
-| Persistence | Spring Data JPA + Hibernate |
-| Schema migrations | Flyway |
-| DTO mapping | MapStruct (compile-time) |
-| Validation | Jakarta Bean Validation |
-| Error handling | `@RestControllerAdvice` global handler |
-| Documentation | SpringDoc OpenAPI 3 |
-| Security | Spring Security (stateless; JWT placeholder) |
+**Package structure:**
+- `controller` — REST endpoints, request/response mapping
+- `service` — business rules, transaction boundaries
+- `repository` — database queries (Spring Data JPA)
+- `model` — JPA entities
+- `dto` — request/response DTOs
+- `mapper` — MapStruct entity ↔ DTO conversion
+- `exception` — custom exceptions + global error handler
+- `config` — security, OpenAPI, JPA auditing
 
 ---
 
-## Prerequisites
+## Quick Start
 
-| Tool | Minimum version |
-|---|---|
-| Java (JDK) | 21 |
-| Maven | 3.9 (or use the bundled `mvnw`) |
-| Docker & Docker Compose | 24+ |
-| PostgreSQL | 15+ (not required when using Docker) |
+### Prerequisites
 
----
+- Java 17+
+- Maven 3.9+ (or use the included `./mvnw`)
+- Docker & docker-compose (for the full stack)
 
-## Quick Start (Docker)
+### Run with Docker Compose (recommended)
 
 ```bash
-# 1. Clone and enter the project
-git clone <repo-url>
-cd employee-management-service
-
-# 2. Build and start both PostgreSQL and the application
-docker compose up --build -d
-
-# 3. Verify services are healthy
-docker compose ps
-
-# 4. Open the Swagger UI
-open http://localhost:8080/swagger-ui/index.html
-
-# 5. Check the health endpoint
-curl http://localhost:8080/actuator/health
-```
-
-To stop:
-
-```bash
-docker compose down          # stop containers (keep volumes)
-docker compose down -v       # stop containers AND remove volumes
-```
-
----
-
-## Local Development (without Docker)
-
-### 1. Start PostgreSQL
-
-You can use Docker just for the database:
-
-```bash
-docker run -d \
-  --name employee-postgres \
-  -e POSTGRES_DB=employee_db \
-  -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=postgres \
-  -p 5432:5432 \
-  postgres:16-alpine
-```
-
-### 2. Configure environment
-
-```bash
+# 1. Copy environment template
 cp .env.example .env
-# Edit .env with your database credentials
+# Edit .env with your preferred passwords (or leave defaults for local dev)
+
+# 2. Start PostgreSQL + application
+docker compose up --build
+
+# The API is now available at http://localhost:8080
+# Swagger UI: http://localhost:8080/swagger-ui.html
 ```
 
-### 3. Run the application
+### Run locally (without Docker)
 
 ```bash
-# Using Maven wrapper
-./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+# 1. Start PostgreSQL (Docker or local install)
+docker run -d --name emp-postgres \
+  -e POSTGRES_DB=employee_db \
+  -e POSTGRES_PASSWORD=postgres \
+  -p 5432:5432 postgres:16-alpine
 
-# Or build the JAR and run it directly
-./mvnw package -DskipTests
-java -jar target/employee-management-service-*.jar --spring.profiles.active=dev
+# 2. Set environment variables
+export DB_URL=jdbc:postgresql://localhost:5432/employee_db
+export DB_USERNAME=postgres
+export DB_PASSWORD=postgres
+
+# 3. Build and run
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 ---
 
 ## Configuration
 
-All sensitive values are read from environment variables. See `.env.example` for the full list.
+All sensitive values are supplied via environment variables. Copy `.env.example` to `.env`:
 
 | Variable | Default | Description |
 |---|---|---|
-| `PORT` | `8080` | HTTP server port |
-| `SPRING_PROFILES_ACTIVE` | — | Active profile (`dev` / `prod`) |
-| `DB_URL` | `jdbc:postgresql://localhost:5432/employee_db` | JDBC connection URL |
-| `DB_USERNAME` | `postgres` | Database username |
+| `SPRING_PROFILES_ACTIVE` | `dev` | Active profile (`dev`, `prod`) |
+| `SERVER_PORT` | `8080` | HTTP port |
+| `DB_URL` | `jdbc:postgresql://localhost:5432/employee_db` | JDBC URL |
+| `DB_USERNAME` | `postgres` | Database user |
 | `DB_PASSWORD` | `postgres` | Database password |
-| `DB_POOL_SIZE` | `10` | HikariCP maximum pool size |
-| `APP_SERVER_URL` | `http://localhost:8080` | Base URL shown in OpenAPI spec |
-| `SWAGGER_ENABLED` | `true` | Set to `false` in production |
+| `ADMIN_PASSWORD` | `changeme` | Password for `admin` user |
+| `HR_PASSWORD` | `changeme` | Password for `hruser` user |
+
+Profile-specific overrides live in `src/main/resources/application-{profile}.yml`.
 
 ---
 
 ## API Reference
 
-Interactive documentation: **`/swagger-ui/index.html`**
-OpenAPI spec: **`/v3/api-docs`**
+Base URL: `http://localhost:8080/api/v1`
+
+Interactive docs: **`http://localhost:8080/swagger-ui.html`**
+
+### Authentication
+
+All endpoints (except `/actuator/health`, `/swagger-ui/**`, `/v3/api-docs/**`) require HTTP Basic Auth.
+
+**Built-in users:**
+
+| Username | Password (default) | Roles |
+|---|---|---|
+| `admin` | `changeme` | `ADMIN`, `HR` |
+| `hruser` | `changeme` | `HR` |
 
 ### Endpoints
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/v1/employees` | List all employees (paginated) |
-| `GET` | `/api/v1/employees/{id}` | Get employee by ID |
-| `POST` | `/api/v1/employees` | Create a new employee |
-| `PUT` | `/api/v1/employees/{id}` | Update an employee (partial) |
-| `DELETE` | `/api/v1/employees/{id}` | Delete an employee |
-| `GET` | `/api/v1/employees/department/{dept}` | List by department |
-| `GET` | `/api/v1/employees/status/{status}` | List by status |
-| `GET` | `/api/v1/employees/search?query=…` | Keyword search |
-
-### Pagination Query Parameters
-
-| Parameter | Default | Description |
-|---|---|---|
-| `page` | `0` | Page number (0-based) |
-| `size` | `20` | Items per page |
-| `sortBy` | `lastName` | Field to sort by |
-| `sortDir` | `asc` | Sort direction (`asc` / `desc`) |
-
-### Employee Status Values
-
-`ACTIVE` · `INACTIVE` · `ON_LEAVE` · `TERMINATED`
-
-### Example: Create an employee
-
-```bash
-curl -X POST http://localhost:8080/api/v1/employees \
-  -H "Content-Type: application/json" \
-  -d '{
-    "firstName": "Jane",
-    "lastName": "Doe",
-    "email": "jane.doe@company.com",
-    "phone": "+1-555-123-4567",
-    "department": "Engineering",
-    "jobTitle": "Senior Software Engineer",
-    "salary": 105000.00,
-    "hireDate": "2022-03-15",
-    "status": "ACTIVE"
-  }'
+#### Create Employee
 ```
+POST /api/v1/employees
+Content-Type: application/json
 
-### Example: Search employees
-
-```bash
-curl "http://localhost:8080/api/v1/employees/search?query=engineering&page=0&size=10"
-```
-
-### Error response format
-
-```json
 {
-  "status": 400,
-  "error": "VALIDATION_ERROR",
-  "message": "Request validation failed",
-  "path": "/api/v1/employees",
-  "timestamp": "2024-01-15T10:30:00Z",
-  "fieldErrors": [
-    {
-      "field": "email",
-      "rejectedValue": "not-an-email",
-      "message": "Email must be a valid address"
-    }
-  ]
+  "firstName": "Jane",
+  "lastName": "Doe",
+  "email": "jane.doe@example.com",
+  "phone": "+1-555-123-4567",
+  "department": "Engineering",
+  "jobTitle": "Senior Software Engineer",
+  "employmentStatus": "ACTIVE",
+  "salary": 95000.00,
+  "hireDate": "2023-06-15",
+  "dateOfBirth": "1990-04-22"
 }
+
+→ 201 Created   — returns the created employee
+→ 400 Bad Request — validation errors
+→ 409 Conflict  — email already exists
+```
+
+#### List Employees (paginated)
+```
+GET /api/v1/employees?page=0&size=20&sortBy=lastName&direction=asc
+
+→ 200 OK  — paged list of employees
+```
+
+#### Get by ID
+```
+GET /api/v1/employees/{id}
+
+→ 200 OK  — employee object
+→ 404 Not Found
+```
+
+#### Get by Employee Number
+```
+GET /api/v1/employees/number/{employeeNumber}
+```
+
+#### Filter by Department
+```
+GET /api/v1/employees/department/{department}
+```
+
+#### Filter by Status
+```
+GET /api/v1/employees/status/{status}
+# status ∈ {ACTIVE, INACTIVE, ON_LEAVE, TERMINATED}
+```
+
+#### Search
+```
+GET /api/v1/employees/search?query=engineering
+
+→ 200 OK — employees matching query in name, email, department, or job title
+```
+
+#### Update Employee
+```
+PUT /api/v1/employees/{id}
+Content-Type: application/json
+# Same body as POST
+
+→ 200 OK  — updated employee
+→ 404 Not Found
+→ 409 Conflict
+```
+
+#### Delete Employee
+```
+DELETE /api/v1/employees/{id}
+
+→ 204 No Content
+→ 404 Not Found
+```
+
+#### Health Check
+```
+GET /actuator/health   → 200 {"status":"UP"}
+GET /actuator/info     → application metadata
+GET /actuator/metrics  → Micrometer metrics
 ```
 
 ---
 
-## Testing
+## Running Tests
 
 ```bash
-# Run all tests
+# Unit + integration tests (H2 in-memory)
 ./mvnw test
 
-# Run only unit tests
-./mvnw test -pl . -Dtest="*ServiceTest,*ControllerTest"
-
-# Run with coverage report (target/site/jacoco/index.html)
-./mvnw verify
+# Skip tests during build
+./mvnw package -DskipTests
 ```
 
-Tests use **H2 in-memory database** (PostgreSQL-compatible mode) so no external service is required.
+Test categories:
+- **`service/`** — unit tests for business logic (Mockito)
+- **`controller/`** — MVC slice tests (`@WebMvcTest`)
+- **`integration/`** — full Spring context against H2
+
+---
+
+## Docker
+
+### Build image
+```bash
+docker build -t employee-management-service:latest .
+```
+
+### Run container only (external PostgreSQL required)
+```bash
+docker run -p 8080:8080 \
+  -e DB_URL=jdbc:postgresql://host.docker.internal:5432/employee_db \
+  -e DB_USERNAME=postgres \
+  -e DB_PASSWORD=postgres \
+  employee-management-service:latest
+```
+
+### With pgAdmin (dev tool)
+```bash
+docker compose --profile tools up
+# pgAdmin: http://localhost:5050
+```
 
 ---
 
 ## Project Structure
 
 ```
-src/
-├── main/
-│   ├── java/com/company/employee/
-│   │   ├── EmployeeManagementApplication.java   # Entry point
-│   │   ├── config/
-│   │   │   ├── AuditConfig.java                 # JPA audit timestamps
-│   │   │   ├── OpenApiConfig.java               # Swagger metadata
-│   │   │   └── SecurityConfig.java              # Spring Security rules
-│   │   ├── controller/
-│   │   │   └── EmployeeController.java          # REST endpoints
-│   │   ├── service/
-│   │   │   ├── EmployeeService.java             # Interface
-│   │   │   └── impl/EmployeeServiceImpl.java    # Implementation
-│   │   ├── repository/
-│   │   │   └── EmployeeRepository.java          # Spring Data JPA
-│   │   ├── model/entity/
-│   │   │   └── Employee.java                    # JPA entity
-│   │   ├── dto/
-│   │   │   ├── request/                         # CreateEmployeeRequest, UpdateEmployeeRequest
-│   │   │   └── response/                        # EmployeeResponse, PagedResponse
-│   │   ├── mapper/
-│   │   │   └── EmployeeMapper.java              # MapStruct mapper
-│   │   └── exception/
-│   │       ├── EmployeeNotFoundException.java
-│   │       ├── DuplicateEmailException.java
-│   │       ├── ErrorResponse.java
-│   │       └── GlobalExceptionHandler.java
-│   └── resources/
-│       ├── application.yml                      # Base config
-│       ├── application-dev.yml                  # Dev overrides
-│       ├── application-prod.yml                 # Prod overrides
-│       └── db/migration/
-│           ├── V1__create_employees_table.sql
-│           └── V2__seed_sample_employees.sql
-└── test/
-    ├── java/com/company/employee/
-    │   ├── controller/EmployeeControllerTest.java
-    │   └── service/EmployeeServiceTest.java
-    └── resources/
-        └── application-test.yml
+employee-management-service/
+├── src/
+│   ├── main/
+│   │   ├── java/com/example/employeemanagement/
+│   │   │   ├── EmployeeManagementApplication.java
+│   │   │   ├── config/           # Security, OpenAPI, Audit
+│   │   │   ├── controller/       # REST controllers
+│   │   │   ├── dto/              # Request/Response DTOs
+│   │   │   ├── exception/        # Custom exceptions + global handler
+│   │   │   ├── mapper/           # MapStruct mappers
+│   │   │   ├── model/            # JPA entities
+│   │   │   ├── repository/       # Spring Data repositories
+│   │   │   └── service/          # Business logic (interface + impl)
+│   │   └── resources/
+│   │       ├── application.yml
+│   │       ├── application-dev.yml
+│   │       ├── application-prod.yml
+│   │       └── db/migration/     # Flyway SQL migrations
+│   └── test/
+│       ├── java/...              # Unit + integration tests
+│       └── resources/
+│           └── application-test.yml
+├── Dockerfile
+├── docker-compose.yml
+├── pom.xml
+├── .env.example
+├── .gitignore
+└── README.md
 ```

@@ -1,41 +1,34 @@
-# =============================================================================
-# .gitignore – Employee Management Service
-# =============================================================================
-
-# ── Build output ──────────────────────────────────────────────────────────────
+# ---- Build outputs ----
 target/
 *.class
 *.jar
 *.war
-*.ear
 
-# ── IDE ───────────────────────────────────────────────────────────────────────
+# ---- IDE ----
 .idea/
 *.iml
-*.iws
 .vscode/
-*.code-workspace
-.classpath
-.project
-.settings/
-*.eclipse
+*.swp
+*.swo
+.DS_Store
 
-# ── Environment / secrets ─────────────────────────────────────────────────────
+# ---- Environment / Secrets ----
 .env
 *.env.local
 *.env.*.local
+application-local.yml
+application-secrets.yml
 
-# ── OS ────────────────────────────────────────────────────────────────────────
-.DS_Store
-Thumbs.db
-
-# ── Logs ──────────────────────────────────────────────────────────────────────
-*.log
+# ---- Logs ----
 logs/
+*.log
 
-# ── Maven wrapper (optional — commit if you want reproducible builds) ─────────
-# .mvn/wrapper/maven-wrapper.jar
+# ---- Maven wrapper ----
+!.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
 
-# ── Docker ────────────────────────────────────────────────────────────────────
-# Keep docker-compose.yml but ignore any local override
-docker-compose.override.yml
+# ---- Docker volumes ----
+postgres_data/
+
+# ---- OS ----
+Thumbs.db

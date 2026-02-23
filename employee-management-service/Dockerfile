@@ -1,51 +1,54 @@
-# =============================================================================
+# ============================================================
 # Multi-stage Dockerfile for Employee Management Service
-# =============================================================================
-# Stage 1 – Build
-# =============================================================================
-FROM eclipse-temurin:21-jdk-alpine AS builder
+# ============================================================
 
-WORKDIR /app
+# ---- Stage 1: Build ----
+FROM eclipse-temurin:17-jdk-alpine AS builder
 
-# Copy dependency manifests first to take advantage of layer caching
-COPY pom.xml .
-COPY .mvn/ .mvn/
-COPY mvnw .
+WORKDIR /build
 
-RUN chmod +x mvnw
-# Download dependencies in a separate layer — only re-runs when pom.xml changes
-RUN ./mvnw dependency:go-offline -B
+# Copy Maven wrapper and POM first (layer-cache friendly)
+COPY mvnw ./
+COPY .mvn .mvn
+COPY pom.xml ./
 
-# Copy source and build
+# Download dependencies (cached layer)
+RUN ./mvnw dependency:go-offline -q
+
+# Copy source and build the fat JAR (skip tests — run them in CI)
 COPY src ./src
-RUN ./mvnw package -DskipTests -B
+RUN ./mvnw package -DskipTests -q
 
-# =============================================================================
-# Stage 2 – Runtime (minimal JRE image)
-# =============================================================================
-FROM eclipse-temurin:21-jre-alpine AS runtime
+# Extract the layered JAR for optimised layer caching
+RUN java -Djarmode=layertools -jar target/*.jar extract --destination /build/layers
 
-WORKDIR /app
+# ---- Stage 2: Runtime ----
+FROM eclipse-temurin:17-jre-alpine AS runtime
 
-# Create a non-root user for the process
+# Security: run as non-root user
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-# Copy only the fat JAR from the build stage
-COPY --from=builder /app/target/*.jar app.jar
+WORKDIR /app
 
-RUN chown appuser:appgroup app.jar
+# Copy layered dependencies (most stable layers first)
+COPY --from=builder /build/layers/dependencies          ./
+COPY --from=builder /build/layers/spring-boot-loader    ./
+COPY --from=builder /build/layers/snapshot-dependencies ./
+COPY --from=builder /build/layers/application           ./
+
+# Create log directory with correct permissions
+RUN mkdir -p /app/logs && chown -R appuser:appgroup /app/logs
 
 USER appuser
 
-# Expose the default application port
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+# Health check — Docker will mark the container unhealthy if this fails
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD wget -qO- http://localhost:8080/actuator/health || exit 1
 
 ENTRYPOINT ["java", \
     "-XX:+UseContainerSupport", \
     "-XX:MaxRAMPercentage=75.0", \
     "-Djava.security.egd=file:/dev/./urandom", \
-    "-jar", "app.jar"]
+    "org.springframework.boot.loader.launch.JarLauncher"]

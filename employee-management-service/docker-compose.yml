@@ -1,53 +1,50 @@
 version: "3.9"
 
-# =============================================================================
-# Local development stack
-# Usage:
-#   docker compose up -d          # start all services
-#   docker compose logs -f app    # tail application logs
-#   docker compose down -v        # stop and remove volumes
-# =============================================================================
-
 services:
-
-  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  # ------------------------------------------------------------------
+  # PostgreSQL database
+  # ------------------------------------------------------------------
   postgres:
     image: postgres:16-alpine
-    container_name: employee-postgres
+    container_name: emp-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: employee_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-employee_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d employee_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-employee_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 20s
 
-  # ── Application ────────────────────────────────────────────────────────────
+  # ------------------------------------------------------------------
+  # Employee Management Service
+  # ------------------------------------------------------------------
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: employee-app
+    container_name: emp-service
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: dev
-      DB_URL: jdbc:postgresql://postgres:5432/employee_db
-      DB_USERNAME: postgres
-      DB_PASSWORD: postgres
-      APP_SERVER_URL: http://localhost:8080
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-employee_db}
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      SERVER_PORT: 8080
     ports:
-      - "8080:8080"
+      - "${APP_PORT:-8080}:8080"
+    volumes:
+      - app_logs:/app/logs
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 30s
@@ -55,6 +52,22 @@ services:
       retries: 3
       start_period: 60s
 
+  # ------------------------------------------------------------------
+  # pgAdmin — optional database UI (remove in CI/prod)
+  # ------------------------------------------------------------------
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: emp-pgadmin
+    restart: unless-stopped
+    profiles: ["tools"]   # start only when: docker compose --profile tools up
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    depends_on:
+      - postgres
+
 volumes:
   postgres_data:
-    name: employee_postgres_data
+  app_logs:
