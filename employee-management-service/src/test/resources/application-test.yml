@@ -1,0 +1,24 @@
+# ── Test profile ─────────────────────────────────────────────────────────────
+# Uses an in-memory H2 database (PostgreSQL-compatibility mode) so that unit
+# and integration tests run without an external database.
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+    show-sql: true
+
+  flyway:
+    enabled: false    # Let Hibernate manage schema during tests
+
+logging:
+  level:
+    com.company.employee: DEBUG
+    org.hibernate.SQL: DEBUG

@@ -1,0 +1,23 @@
+# ── Production profile overrides ────────────────────────────────────────────
+# Activate with: SPRING_PROFILES_ACTIVE=prod
+
+spring:
+  jpa:
+    show-sql: false
+
+management:
+  endpoint:
+    health:
+      show-details: never    # Never expose internal details in production
+
+logging:
+  level:
+    root: WARN
+    com.company.employee: INFO
+
+springdoc:
+  swagger-ui:
+    # Optionally disable Swagger UI in production
+    enabled: ${SWAGGER_ENABLED:false}
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
